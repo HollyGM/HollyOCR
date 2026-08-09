@@ -30,7 +30,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r hollyocr/requirements.txt
-          python -m pip install pytest pyflakes pip-audit
+          python -m pip install pytest ruff pyflakes bandit pip-audit
       - name: Static checks
         run: |
           python -m ruff check hollyocr tests
