@@ -183,6 +183,21 @@ def _extract_pypdf_page_text(page, page_index, diagnostic_callback=None):
     return text
 
 
+def _has_complete_pdf_markers(pdf_path: Path):
+    """Reject clearly truncated files before native parsers can retain handles."""
+    try:
+        file_size = pdf_path.stat().st_size
+        if file_size < 12:
+            return False
+        with pdf_path.open("rb") as pdf_stream:
+            header = pdf_stream.read(1024)
+            pdf_stream.seek(max(0, file_size - 65536))
+            trailer = pdf_stream.read()
+    except OSError:
+        return False
+    return b"%PDF-" in header and b"%%EOF" in trailer
+
+
 def iter_extracted_text_pages(
     pdf_path: Path,
     output_format='txt',
@@ -193,6 +208,9 @@ def iter_extracted_text_pages(
 ):
     """Yield text per page using the best available native extractor."""
     output_format = (output_format or 'txt').lower().strip()
+    if not _has_complete_pdf_markers(pdf_path):
+        LOGGER.error("PDF incompleto ou corrompido: marcadores obrigatórios ausentes em %s", pdf_path)
+        return
     global _mupdf_disable_notice_emitted
     if MUPDF_DISABLED_FOR_STABILITY and not _mupdf_disable_notice_emitted:
         LOGGER.warning(
@@ -411,6 +429,14 @@ def inspect_pdf(pdf_path: Path):
     """
     if PdfReader is None:
         return PdfInspection(0, frozenset(), {}, False, "pypdf indisponível para inspecionar imagens.")
+    if not _has_complete_pdf_markers(pdf_path):
+        return PdfInspection(
+            0,
+            frozenset(),
+            {},
+            False,
+            "PDF incompleto ou corrompido: cabeçalho ou marcador final ausente.",
+        )
     try:
         with pdf_path.open("rb") as pdf_stream:
             reader = PdfReader(pdf_stream)
