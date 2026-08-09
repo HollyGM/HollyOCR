@@ -15,6 +15,10 @@
   <img alt="Plataformas" src="https://img.shields.io/badge/plataformas-macOS%20%7C%20Windows%20%7C%20Linux-F3FAFC">
 </p>
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Interface do HollyOCR" width="820">
+</p>
+
 ## O que o HollyOCR faz
 
 - Extrai primeiro o texto selecionável e preserva o conteúdo original.
