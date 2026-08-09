@@ -26,6 +26,7 @@ Todas as mudanças relevantes do HollyOCR são registradas neste arquivo.
 - Exclusão temporária fica restrita à pasta temporária do sistema.
 - Exceções dentro do silenciador do Apple Vision propagam corretamente.
 - Medição de imagens continua funcionando com a API atual do `pypdf`.
+- PDFs corrompidos são fechados corretamente após a análise, inclusive no Windows.
 - Configurações são migradas e gravadas de forma atômica.
 
 ### Removido

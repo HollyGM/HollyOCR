@@ -231,6 +231,8 @@ class PipelineMinimalTests(unittest.TestCase):
         broken.write_bytes(b"%PDF-1.4\ninvalid")
         meta, _ = app.process_file(broken, self.output_dir, self.input_dir, use_ocr=False)
         self.assertEqual(meta["status"], "failed")
+        broken.unlink()
+        self.assertFalse(broken.exists())
 
     def test_output_is_atomic_and_unique(self):
         target = self.output_dir / "same.md"

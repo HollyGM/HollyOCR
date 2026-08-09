@@ -243,9 +243,10 @@ def iter_extracted_text_pages(
     try:
         if PdfReader is None:
             raise RuntimeError("pypdf não está disponível para fallback de texto nativo.")
-        reader = PdfReader(str(pdf_path))
-        for page_index, page in enumerate(reader.pages):
-            yield _extract_pypdf_page_text(page, page_index, diagnostic_callback)
+        with pdf_path.open("rb") as pdf_stream:
+            reader = PdfReader(pdf_stream)
+            for page_index, page in enumerate(reader.pages):
+                yield _extract_pypdf_page_text(page, page_index, diagnostic_callback)
         return
     except Exception as e:
         LOGGER.exception("pypdf failed to extract text from %s", pdf_path)
@@ -411,38 +412,39 @@ def inspect_pdf(pdf_path: Path):
     if PdfReader is None:
         return PdfInspection(0, frozenset(), {}, False, "pypdf indisponível para inspecionar imagens.")
     try:
-        reader = PdfReader(str(pdf_path))
-        image_counts = {}
-        image_coverages = {}
-        coverage_warnings = []
-        form_cache = {}
-        for page_index, page in enumerate(reader.pages):
-            resources = page.get("/Resources") if hasattr(page, "get") else None
-            image_count = _count_images_in_resources(resources)
-            if image_count:
-                image_counts[page_index] = image_count
-                try:
-                    coverages = _page_image_coverages(page, reader, form_cache=form_cache)
-                    if coverages:
-                        image_coverages[page_index] = tuple(coverages)
-                    else:
+        with pdf_path.open("rb") as pdf_stream:
+            reader = PdfReader(pdf_stream)
+            image_counts = {}
+            image_coverages = {}
+            coverage_warnings = []
+            form_cache = {}
+            for page_index, page in enumerate(reader.pages):
+                resources = page.get("/Resources") if hasattr(page, "get") else None
+                image_count = _count_images_in_resources(resources)
+                if image_count:
+                    image_counts[page_index] = image_count
+                    try:
+                        coverages = _page_image_coverages(page, reader, form_cache=form_cache)
+                        if coverages:
+                            image_coverages[page_index] = tuple(coverages)
+                        else:
+                            coverage_warnings.append(page_index + 1)
+                    except Exception:
                         coverage_warnings.append(page_index + 1)
-                except Exception:
-                    coverage_warnings.append(page_index + 1)
-                    LOGGER.warning("Could not measure image placement on page %s of %s", page_index + 1, pdf_path)
-        warning = ""
-        if coverage_warnings:
-            preview = ", ".join(str(page) for page in coverage_warnings[:8])
-            suffix = "..." if len(coverage_warnings) > 8 else ""
-            warning = f"Não foi possível medir a área das imagens nas páginas {preview}{suffix}."
-        return PdfInspection(
-            page_count=len(reader.pages),
-            image_pages=frozenset(image_counts),
-            image_counts=image_counts,
-            warning=warning,
-            image_coverages=image_coverages,
-            coverage_reliable=not coverage_warnings,
-        )
+                        LOGGER.warning("Could not measure image placement on page %s of %s", page_index + 1, pdf_path)
+            warning = ""
+            if coverage_warnings:
+                preview = ", ".join(str(page) for page in coverage_warnings[:8])
+                suffix = "..." if len(coverage_warnings) > 8 else ""
+                warning = f"Não foi possível medir a área das imagens nas páginas {preview}{suffix}."
+            return PdfInspection(
+                page_count=len(reader.pages),
+                image_pages=frozenset(image_counts),
+                image_counts=image_counts,
+                warning=warning,
+                image_coverages=image_coverages,
+                coverage_reliable=not coverage_warnings,
+            )
     except Exception as exc:
         LOGGER.exception("Failed to inspect PDF structure for %s", pdf_path)
         return PdfInspection(0, frozenset(), {}, False, f"Falha ao inspecionar imagens: {exc}")
