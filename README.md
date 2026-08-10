@@ -1,11 +1,10 @@
 <p align="center">
-  <img src="logo.png" alt="Ícone do HollyOCR" width="152">
+  <img src="docs/branding/holly-banner.svg" alt="HollyOCR — OCR local para PDFs, imagens, DOCX e Markdown" width="100%">
 </p>
 
-<h1 align="center">HollyOCR</h1>
-
 <p align="center">
-  Converta PDFs, imagens, DOCX e Markdown em texto pesquisável ou Markdown organizado — com processamento local.
+  <strong>OCR local para PDFs, imagens, DOCX e Markdown.</strong><br>
+  Preservação do texto original · Privacidade por padrão · Processamento no dispositivo
 </p>
 
 <p align="center">
@@ -14,6 +13,10 @@
   <img alt="Licença" src="https://img.shields.io/badge/licença-Apache--2.0-92AAB5">
   <img alt="Plataformas" src="https://img.shields.io/badge/plataformas-macOS%20%7C%20Windows%20%7C%20Linux-F3FAFC">
 </p>
+
+> **Parte da suíte Holly**  
+> Ferramentas local-first para texto, documentos e mídia, com privacidade por padrão e segurança verificável.  
+> [HollyTranscrição](https://github.com/HollyGM/HollyTranscricao) · [HollyCorretor](https://github.com/HollyGM/HollyCorretor) · [HollyOptimizer](https://github.com/HollyGM/HollyOptimizer)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Interface do HollyOCR" width="820">
