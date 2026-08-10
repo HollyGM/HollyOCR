@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06101D"/><stop offset="1" stop-color="#0D2137"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="150" y1="70" x2="1180" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64F1DB"/><stop offset="1" stop-color="#66B8FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="360" rx="28" fill="url(#bg)"/>
+  <g opacity="0.22" stroke="#89A8C7" stroke-width="2"><path d="M50 85H180L210 115H320"/><path d="M70 285H210L245 250H360"/><path d="M1050 78H1150L1180 108H1238"/><path d="M960 290H1080L1115 255H1230"/></g>
+  <g fill="#8EF5E6" fill-opacity="0.45"><circle cx="180" cy="85" r="5"/><circle cx="320" cy="115" r="5"/><circle cx="210" cy="285" r="5"/><circle cx="360" cy="250" r="5"/><circle cx="1150" cy="78" r="5"/><circle cx="1238" cy="108" r="5"/><circle cx="1080" cy="290" r="5"/><circle cx="1230" cy="255" r="5"/></g>
+  <circle cx="184" cy="180" r="84" fill="#07111F" stroke="url(#accent)" stroke-width="6"/>
+  <rect x="146" y="128" width="22" height="104" rx="11" fill="url(#accent)"/><rect x="200" y="128" width="22" height="104" rx="11" fill="url(#accent)"/><rect x="164" y="169" width="40" height="22" rx="11" fill="url(#accent)"/>
+  <circle cx="184" cy="180" r="109" stroke="url(#accent)" stroke-width="2" stroke-dasharray="7 11" opacity="0.55"/>
+  <text x="305" y="106" fill="#64F1DB" font-family="Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="2.8">HOLLY SUITE · LOCAL-FIRST TOOLS</text>
+  <text x="305" y="172" fill="#F4F8FF" font-family="Arial, sans-serif" font-size="62" font-weight="700">HollyOCR</text>
+  <text x="305" y="214" fill="#D5E3F3" font-family="Arial, sans-serif" font-size="26">OCR local para PDFs, imagens, DOCX e Markdown</text>
+  <text x="305" y="255" fill="#9DB6D1" font-family="Arial, sans-serif" font-size="20">Preservação do texto original · Apple Vision · Tesseract · Privacidade por padrão</text>
+</svg>
