@@ -4,7 +4,6 @@ pytesseract>=0.3.13,<0.4
 Pillow>=12.3.0,<13
 tqdm>=4.68.0,<5
 python-docx>=1.2.0,<2
-customtkinter>=5.2.2,<6
 packaging>=26.0,<27
 PyMuPDF>=1.28.2,<1.29
 pymupdf4llm>=1.28.2,<1.29
@@ -13,7 +12,3 @@ pymupdf4llm>=1.28.2,<1.29
 # Falls back to Tesseract silently if unavailable.
 pyobjc-framework-Vision>=12.2.1,<13; sys_platform == "darwin"
 pyobjc-framework-Quartz>=12.2.1,<13; sys_platform == "darwin"
-
-# Optional: enables drag-and-drop of files into the GUI window. When missing,
-# the GUI still works; users select files via the regular file picker.
-tkinterdnd2>=0.5.0,<0.6

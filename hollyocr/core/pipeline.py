@@ -183,6 +183,14 @@ def process_file(
 
     This pipeline performs extraction and OCR only; it does not call models,
     external APIs, or content summarizers.
+
+    ``executor``: when ``workers`` > 1, callers processing more than one file
+    or more than one OCR batch should pass a shared ``ProcessPoolExecutor``
+    here (see ``gui.shared.processing.run_conversion_loop`` and ``cli.main``).
+    Without it, this function falls back to opening and closing its own pool
+    for every render batch, which pays process-startup cost repeatedly instead
+    of once -- costly on large documents, and especially so with the Apple
+    Vision backend, whose CoreML models re-pay their warm-up cost per process.
     """
     file_path, out_base, input_root = Path(file_path), Path(out_base), Path(input_root)
     output_format = normalize_output_format(output_format)

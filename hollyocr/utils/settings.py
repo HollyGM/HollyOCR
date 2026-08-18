@@ -6,7 +6,6 @@ cloud credential from versions that offered external model integrations.
 
 import json
 import os
-from pathlib import Path
 
 from .paths import get_config_path, get_legacy_config_paths, unique_paths
 
@@ -18,14 +17,7 @@ CONFIG_FILE = get_config_path()
 
 def load_settings():
     """Load user preferences from JSON file."""
-    script_dir = Path(__file__).resolve().parent.parent
-    legacy_paths = [
-        CONFIG_FILE,
-        *get_legacy_config_paths(),
-        Path.cwd() / CONFIG_FILE.name,
-        script_dir / CONFIG_FILE.name,
-        script_dir.parent / CONFIG_FILE.name,
-    ]
+    legacy_paths = [CONFIG_FILE, *get_legacy_config_paths()]
     for config_path in unique_paths(legacy_paths):
         if not config_path.exists():
             continue

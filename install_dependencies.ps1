@@ -24,10 +24,22 @@ if ($popplerCheck) {
 
     # URL for Poppler (Release 24.02.0-0 from oschwartz10612)
     $popplerUrl = "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.02.0-0/Release-24.02.0-0.zip"
+    # SHA-256 of that exact release asset, captured directly from the pinned URL above.
+    # If oschwartz10612 ever publishes a different v24.02.0-0 asset, this check fails closed
+    # instead of silently extracting and running whatever was downloaded.
+    $popplerExpectedHash = "F6F01582484B0587096955ADCB4B8881BCF7FF27AD62FC4809C23E20810FB7CC"
     $zipPath = Join-Path $binDir "poppler.zip"
 
     try {
         Invoke-WebRequest -Uri $popplerUrl -OutFile $zipPath
+
+        $actualHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
+        if ($actualHash -ne $popplerExpectedHash) {
+            Remove-Item $zipPath -ErrorAction SilentlyContinue
+            throw "Verificacao de integridade do Poppler falhou. Esperado $popplerExpectedHash, obtido $actualHash. O arquivo baixado NAO foi extraido."
+        }
+        Write-Host "Integridade do Poppler verificada (SHA-256)." -ForegroundColor Green
+
         Write-Host "Extracting Poppler..."
         Expand-Archive -Path $zipPath -DestinationPath $binDir -Force
 

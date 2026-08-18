@@ -5,7 +5,6 @@ macOS builds produce a native arm64 .app bundle. Windows keeps the historical
 single-file executable behavior used by build_exe.bat.
 """
 
-import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -77,10 +76,6 @@ def collect_package(name):
     binaries.extend(package_binaries)
     hiddenimports.extend(package_hidden)
 
-
-collect_package('customtkinter')
-if importlib.util.find_spec('tkinterdnd2') is not None:
-    collect_package('tkinterdnd2')
 
 if is_macos:
     # PyObjC frameworks expose Python modules plus metadata files. Collecting

@@ -58,6 +58,8 @@ python -m hollyocr --gui
 
 No macOS, o modo automático prioriza Apple Vision. O Poppler continua necessário para renderizar páginas de PDFs escaneados.
 
+No `HollyOCR.app` compilado, a extração de texto nativo (não-OCR) usa apenas `pypdf`: o PyMuPDF fica desativado por estabilidade dentro do binário empacotado pelo PyInstaller, o que também desativa o reconhecimento de colunas e o leiaute de Markdown que o PyMuPDF oferece. Ao rodar a partir do código-fonte, como acima, o PyMuPDF é usado normalmente. Para reativar o PyMuPDF no aplicativo empacotado, defina `HOLLYOCR_ENABLE_PYMUPDF=1` antes de abri-lo.
+
 ## Linha de comando
 
 ```bash

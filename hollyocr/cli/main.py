@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from hollyocr.core.extraction import find_files
@@ -120,38 +121,45 @@ def main():
         print('Nenhum arquivo encontrado em', input_arg)
         sys.exit(1)
 
+    workers = args.workers if args.workers is not None else recommended_ocr_workers(backend=ocr_backend)
+
     # Process files sequentially but use per-page parallelism inside each file (controlled by --workers).
+    # One process pool is shared across every file and every OCR batch -- opening a fresh pool per
+    # batch would repeatedly pay process-startup cost and, with the Apple Vision backend, the CoreML
+    # model warm-up cost too (see process_file's docstring).
     show_terminal_progress = (
         not isinstance(sys.stderr, NullWriter)
         and is_interactive_terminal_stream(sys.stderr)
     )
-    for fpath in tqdm(file_list, desc='Processando arquivos', disable=not show_terminal_progress):
-        try:
-            meta, _ = process_file(
-                fpath,
-                out_base,
-                input_root,
-                poppler_path=poppler_path,
-                tesseract_path=tesseract_path,
-                ocr_threshold=args.ocr_threshold,
-                lang=args.lang,
-                workers=args.workers if args.workers is not None else recommended_ocr_workers(backend=ocr_backend),
-                output_format=args.output_format,
-                use_ocr=use_ocr,
-                force_ocr=(use_ocr and args.force_ocr),
-                ocr_dpi=args.ocr_dpi,
-                page_audit_enabled=args.page_audit,
-                ocr_backend=ocr_backend,
-            )
-            if meta:
-                metas.append(meta)
-        except KeyboardInterrupt:
-            print('\nInterrompido pelo usuário')
-            break
-        except Exception as e:
-            LOGGER.exception("Unhandled error processing %s", fpath)
-            metas.append(build_failure_meta(fpath, args.output_format, f"Erro inesperado: {e}"))
-            print(f'Erro processando {fpath}: {e}')
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        for fpath in tqdm(file_list, desc='Processando arquivos', disable=not show_terminal_progress):
+            try:
+                meta, _ = process_file(
+                    fpath,
+                    out_base,
+                    input_root,
+                    poppler_path=poppler_path,
+                    tesseract_path=tesseract_path,
+                    ocr_threshold=args.ocr_threshold,
+                    lang=args.lang,
+                    workers=workers,
+                    executor=executor,
+                    output_format=args.output_format,
+                    use_ocr=use_ocr,
+                    force_ocr=(use_ocr and args.force_ocr),
+                    ocr_dpi=args.ocr_dpi,
+                    page_audit_enabled=args.page_audit,
+                    ocr_backend=ocr_backend,
+                )
+                if meta:
+                    metas.append(meta)
+            except KeyboardInterrupt:
+                print('\nInterrompido pelo usuário')
+                break
+            except Exception as e:
+                LOGGER.exception("Unhandled error processing %s", fpath)
+                metas.append(build_failure_meta(fpath, args.output_format, f"Erro inesperado: {e}"))
+                print(f'Erro processando {fpath}: {e}')
 
     success_count = sum(1 for meta in metas if meta.get('status') == 'ok')
     failed_count = sum(1 for meta in metas if meta.get('status') == 'failed')

@@ -34,11 +34,9 @@ dependencies = [
   "Pillow>=12.3.0,<13",
   "tqdm>=4.68.0,<5",
   "python-docx>=1.2.0,<2",
-  "customtkinter>=5.2.2,<6",
   "packaging>=26.0,<27",
   "PyMuPDF>=1.28.2,<1.29",
   "pymupdf4llm>=1.28.2,<1.29",
-  "tkinterdnd2>=0.5.0,<0.6",
   "pyobjc-framework-Vision>=12.2.1,<13; sys_platform == 'darwin'",
   "pyobjc-framework-Quartz>=12.2.1,<13; sys_platform == 'darwin'",
 ]

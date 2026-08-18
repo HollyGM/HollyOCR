@@ -108,7 +108,6 @@ if exist "HollyOCR.spec" (
         --hidden-import="fitz" ^
         --hidden-import="pymupdf4llm" ^
         --hidden-import="urllib.request" ^
-        --collect-all "customtkinter" ^
         !LOGO_ARGS! ^
         !POPPLER_ARGS! ^
         "hollyocr\app.py"

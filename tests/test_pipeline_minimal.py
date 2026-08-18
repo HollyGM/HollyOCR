@@ -1,6 +1,7 @@
 import logging
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
@@ -9,6 +10,7 @@ from docx import Document
 from PIL import Image, ImageDraw
 
 from hollyocr import app
+from hollyocr.core import extraction as core_extraction
 from hollyocr.core import ocr as core_ocr
 from hollyocr.core import pipeline as core_pipeline
 from hollyocr.core import vision_ocr
@@ -260,6 +262,44 @@ class PipelineMinimalTests(unittest.TestCase):
     def test_profile_is_reported_in_metadata(self):
         meta, _ = app.process_file(self.pdf, self.output_dir, self.input_dir, use_ocr=False)
         self.assertEqual(meta["processing_profile"], "pequeno")
+
+    def test_process_file_reuses_supplied_executor_instead_of_opening_a_new_pool(self):
+        two_page_pdf = self.input_dir / "duas_paginas.pdf"
+        doc = fitz.open()
+        for text in ("Pagina inicial nativa.", "Segunda pagina nativa."):
+            page = doc.new_page()
+            page.insert_text((72, 96), text, fontsize=12)
+        doc.save(two_page_pdf)
+        doc.close()
+
+        with mock.patch.object(core_pipeline, "convert_from_path", return_value=["r1.jpg", "r2.jpg"]), \
+             mock.patch.object(core_pipeline, "ocr_image_file", return_value="Texto visto pelo OCR"), \
+             mock.patch.object(core_pipeline, "ProcessPoolExecutor") as mocked_pool_cls:
+            with ThreadPoolExecutor(max_workers=2) as shared_executor:
+                meta, _ = app.process_file(
+                    two_page_pdf,
+                    self.output_dir,
+                    self.input_dir,
+                    use_ocr=True,
+                    force_ocr=True,
+                    output_format="md",
+                    workers=2,
+                    executor=shared_executor,
+                )
+        self.assertEqual(meta["status"], "ok")
+        mocked_pool_cls.assert_not_called()
+        content = Path(meta["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Texto visto pelo OCR", content)
+
+    def test_native_extraction_falls_back_to_pypdf_when_mupdf_unavailable(self):
+        """Regression test for the extraction path used by the frozen macOS app,
+        where PyMuPDF/pymupdf4llm are disabled for stability (see
+        MUPDF_DISABLED_FOR_STABILITY) and every PDF falls back to pypdf."""
+        with mock.patch.object(core_extraction, "fitz", None), \
+             mock.patch.object(core_extraction, "pymupdf4llm", None):
+            pages = list(extract_text_pages(self.pdf, output_format="md"))
+        self.assertEqual(len(pages), 1)
+        self.assertIn("Documento A", pages[0])
 
 
 class GuiSharedProcessingTests(unittest.TestCase):
