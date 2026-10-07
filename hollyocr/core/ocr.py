@@ -247,23 +247,25 @@ def get_tesseract_languages(tesseract_path=None):
     return set(languages)
 
 
-def check_ocr_environment(poppler_path=None, tesseract_path=None, lang='por'):
+def check_ocr_environment(poppler_path=None, tesseract_path=None, lang='por', backend='auto'):
     """Collect OCR dependency issues that deserve a user-visible warning."""
     from .vision_ocr import is_vision_ocr_available
 
     issues = []
-    vision_available = is_vision_ocr_available()
+    vision_selected = backend == 'vision' or (backend == 'auto' and is_vision_ocr_available())
     if convert_from_path is None:
         issues.append("Biblioteca pdf2image não encontrada.")
     if not poppler_path:
         issues.append("Poppler não encontrado; OCR em PDFs escaneados pode falhar.")
-    if not vision_available:
+    if not vision_selected:
         if pytesseract is None:
             issues.append("Biblioteca pytesseract não encontrada.")
         if not tesseract_path:
             issues.append("Tesseract não encontrado; OCR em imagens e PDFs escaneados pode falhar.")
         elif lang:
             langs = get_tesseract_languages(tesseract_path)
-            if langs is not None and lang not in langs:
-                issues.append(f"Idioma '{lang}' não está instalado no Tesseract.")
+            if langs is not None:
+                for requested_lang in str(lang).split('+'):
+                    if requested_lang not in langs:
+                        issues.append(f"Idioma '{requested_lang}' não está instalado no Tesseract.")
     return issues

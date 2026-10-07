@@ -5,6 +5,7 @@ batch loop), not on OCR correctness -- that is covered by
 tests/test_pipeline_minimal.py, which exercises process_file() directly.
 """
 
+import io
 import sys
 import tempfile
 import unittest
@@ -59,6 +60,19 @@ class CliExecutorReuseTests(unittest.TestCase):
         self.assertEqual(mocked_process_file.call_count, 3)
         for _args, kwargs in mocked_process_file.call_args_list:
             self.assertIs(kwargs.get("executor"), pool_instances[0])
+
+    def test_keyboard_interrupt_exits_without_reporting_success(self):
+        output = io.StringIO()
+        argv = ["hollyocr", "-i", str(self.input_dir), "-o", str(self.output_dir), "--no-ocr"]
+        with mock.patch.object(sys, "argv", argv), \
+             mock.patch.object(sys, "stdout", output), \
+             mock.patch.object(cli_main_module, "process_file", side_effect=KeyboardInterrupt) as process:
+            with self.assertRaises(SystemExit) as raised:
+                cli_main_module.main()
+        self.assertEqual(raised.exception.code, 130)
+        self.assertEqual(process.call_count, 1)
+        self.assertIn("Interrompido pelo usuário", output.getvalue())
+        self.assertNotIn("Concluído", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -31,6 +31,8 @@ import sys
 
 if sys.version_info[:2] != (3, 12):
     raise SystemExit(f"ERROR: Python 3.12 required, found {sys.version.split()[0]}")
+if sys.version_info[:3] < (3, 12, 15):
+    raise SystemExit("ERROR: Python 3.12.15 or a newer 3.12 security patch is required. Upgrade python@3.12.")
 if platform.machine() != "arm64":
     raise SystemExit(f"ERROR: arm64 Python required, found {platform.machine()}")
 print(f"Python preflight: {sys.version.split()[0]} ({platform.machine()})")
@@ -46,14 +48,19 @@ python hollyocr/app.py --help >/dev/null
 python -m hollyocr --help >/dev/null
 
 TRASH_BIN="$(command -v mavis-trash || true)"
-if [[ -z "$TRASH_BIN" ]]; then
-    echo "ERROR: mavis-trash is required for recoverable cleanup of build artifacts."
-    exit 1
-fi
-
+BACKUP_PATH=""
 for old_path in build dist; do
     if [[ -e "$old_path" ]]; then
-        "$TRASH_BIN" "$old_path"
+        if [[ -n "$TRASH_BIN" ]]; then
+            "$TRASH_BIN" "$old_path"
+        else
+            if [[ -z "$BACKUP_PATH" ]]; then
+                mkdir -p .build_backups
+                BACKUP_PATH="$(mktemp -d ".build_backups/$(date +%Y%m%d_%H%M%S).XXXXXX")"
+                echo "Previous build artifacts saved in $BACKUP_PATH"
+            fi
+            mv "$old_path" "$BACKUP_PATH/"
+        fi
     fi
 done
 

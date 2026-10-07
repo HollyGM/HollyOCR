@@ -5,7 +5,6 @@ renders unreliably (see is_macos_legacy_tk), or as the simple/no-AI window.
 import os
 import queue
 import sys
-import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -83,11 +82,11 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
         "input": None,
         "output": user_settings.get("last_output"),
         "processing": False,
-        "stop": False,
         "poppler": default_poppler,
         "tesseract": default_tesseract,
         "file_status": {},
     }
+    lifecycle = gui_shared_processing.GuiTaskLifecycle(root.after, root.destroy)
     last_input = user_settings.get("last_input")
     if last_input and os.path.exists(last_input):
         sel["input"] = last_input
@@ -161,6 +160,8 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
         txt_log.configure(state="disabled")
 
     def update_status(message, color=None):
+        if lifecycle.close_requested:
+            return
         status_var.set(message)
         try:
             ent_status.configure(fg=color or colors["muted"])
@@ -230,7 +231,6 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
 
     def set_processing_state(processing):
         sel["processing"] = processing
-        state = "disabled" if processing else "normal"
         widgets = [
             btn_files,
             btn_folder,
@@ -245,13 +245,26 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
             chk_force_ocr,
             chk_page_audit,
         ]
-        for widget in widgets:
-            try:
-                widget.configure(state=state)
-            except Exception:
-                pass
+        gui_shared_processing.configure_processing_widgets(
+            widgets,
+            processing or lifecycle.close_requested,
+            readonly_widgets=(opt_lang, opt_format, opt_mode, opt_dpi),
+        )
         btn_start.configure(state="disabled" if processing else "normal")
         btn_cancel.configure(state="normal" if processing else "disabled")
+        if lifecycle.close_requested:
+            btn_start.configure(state="disabled")
+            btn_cancel.configure(state="disabled")
+
+    def close_window():
+        if lifecycle.close_requested:
+            return
+        if lifecycle.running:
+            update_status("Encerrando... aguardando o cancelamento e a gravação do progresso.", colors["warning"])
+            btn_quit.configure(state="disabled")
+            set_processing_state(True)
+            btn_cancel.configure(state="disabled")
+        lifecycle.request_close()
 
     def clear_selection():
         if sel.get("processing"):
@@ -269,7 +282,7 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
 
     def cancel_processing():
         if sel.get("processing") and messagebox.askyesno("Cancelar", "Deseja cancelar o processamento atual?"):
-            sel["stop"] = True
+            lifecycle.cancel()
             update_status("Cancelando... aguarde.", colors["warning"])
 
     def process_files():
@@ -291,7 +304,9 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
 
             file_paths = list(find_files(input_path))
             if not file_paths:
-                post_ui(lambda: messagebox.showwarning("Entrada", "Nenhum arquivo compatível foi encontrado."))
+                post_ui(lambda: None if lifecycle.close_requested else messagebox.showwarning(
+                    "Entrada", "Nenhum arquivo compatível foi encontrado."
+                ))
                 post_ui(lambda: update_status("Nenhum arquivo encontrado.", colors["warning"]))
                 return
 
@@ -315,6 +330,7 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
                 "page_audit": page_audit_enabled,
                 "lang": lang_label,
                 "output_format": f"{output_format} (.{output_format})",
+                "output_mode": mode,
                 "appearance_mode": "Light",
                 "plain_tk_gui": True,
             })
@@ -358,7 +374,7 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
                 output_format=output_format,
                 output_mode=mode,
                 workers=workers,
-                should_stop=lambda: sel.get("stop", False),
+                should_stop=lifecycle.should_stop,
                 describe_file_progress=lambda i, t, p: f"[{i}/{t}] Processando {p.name}",
                 make_status_callback=lambda i, t, p: (
                     lambda message: post_ui(lambda m=message, idx=i, n=p.name: update_status(f"[{idx}/{t}] {n}: {m}"))
@@ -375,7 +391,9 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
             failed_count = sum(1 for meta in metas if meta.get("status") == "failed")
 
             def finish_dialog():
-                if sel.get("stop"):
+                if lifecycle.close_requested:
+                    return
+                if lifecycle.should_stop():
                     messagebox.showinfo("Cancelado", "Processamento interrompido pelo usuário.")
                     return
                 update_status(
@@ -394,7 +412,9 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
             post_ui(finish_dialog)
         except Exception as exc:
             LOGGER.exception("Plain Tk GUI processing failed")
-            post_ui(lambda e=exc: messagebox.showerror("Erro", f"Erro durante processamento:\n{e}"))
+            post_ui(lambda e=exc: None if lifecycle.close_requested else messagebox.showerror(
+                "Erro", f"Erro durante processamento:\n{e}"
+            ))
             post_ui(lambda e=exc: update_status(f"Erro: {e}", colors["danger"]))
         finally:
             try:
@@ -405,6 +425,8 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
             post_ui(lambda: set_processing_state(False))
 
     def start_processing():
+        if lifecycle.close_requested:
+            return
         if not sel.get("input") or not sel.get("output"):
             messagebox.showwarning("Faltando", "Escolha entrada e pasta de saída antes de iniciar.")
             return
@@ -415,6 +437,12 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
             selected_dpi = parse_positive_int_gui(dpi_var.get(), "DPI do OCR", 300, 450)
         except ValueError as exc:
             messagebox.showwarning("Configuração", str(exc))
+            return
+
+        selected_format = format_var.get()
+        selected_mode = mode_var.get()
+        if selected_format not in {"md", "txt"} or selected_mode not in {"individual", "compiled"}:
+            messagebox.showwarning("Configuração", "Escolha um formato e um agrupamento disponíveis na lista.")
             return
 
         selected_lang_label = lang_var.get()
@@ -432,8 +460,8 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
                 if not messagebox.askyesno("Atenção ao OCR", msg):
                     return
 
-        sel["output_format"] = format_var.get()
-        sel["output_mode"] = mode_var.get()
+        sel["output_format"] = selected_format
+        sel["output_mode"] = selected_mode
         sel["lang"] = selected_lang_code
         sel["lang_label"] = selected_lang_label
         sel["use_ocr"] = selected_use_ocr
@@ -441,11 +469,10 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
         sel["page_audit"] = bool(page_audit_var.get())
         sel["ocr_threshold"] = selected_threshold
         sel["ocr_dpi"] = selected_dpi
-        sel["stop"] = False
         set_processing_state(True)
         set_progress(0)
         append_log("Processamento iniciado.")
-        threading.Thread(target=process_files, daemon=True).start()
+        lifecycle.start(process_files)
 
     def bind_mousewheel(widget):
         def _wheel(event):
@@ -532,7 +559,8 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
         saved_lang = "por (Português)"
     lang_var = tk.StringVar(value=saved_lang)
     format_var = tk.StringVar(value="md" if "md" in str(user_settings.get("output_format", "md")).lower() else "txt")
-    mode_var = tk.StringVar(value="individual")
+    saved_mode = user_settings.get("output_mode", "individual")
+    mode_var = tk.StringVar(value=saved_mode if saved_mode in {"individual", "compiled"} else "individual")
     saved_dpi = str(user_settings.get("ocr_dpi", "300"))
     if saved_dpi not in {"300", "400", "450"}:
         saved_dpi = "300"
@@ -782,7 +810,7 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
     btn_cancel.grid(row=0, column=1, padx=(0, 8))
     btn_clear = make_button(actions, "Limpar", clear_selection)
     btn_clear.grid(row=0, column=2, padx=(0, 8))
-    btn_quit = make_button(actions, "Sair", root.destroy)
+    btn_quit = make_button(actions, "Sair", close_window)
     btn_quit.grid(row=0, column=3)
     ttk.Label(
         actions,
@@ -792,6 +820,7 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
 
     refresh_file_list()
     update_path_labels()
+    root.protocol("WM_DELETE_WINDOW", close_window)
     root.after(80, drain_ui_queue)
     root.mainloop()
     return sel["input"], sel["output"]

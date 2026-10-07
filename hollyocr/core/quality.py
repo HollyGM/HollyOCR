@@ -2,8 +2,6 @@
 
 import re
 import unicodedata
-from collections import Counter
-from difflib import SequenceMatcher
 
 PAGE_TEXT_QUALITY_MIN_SCORE = 55
 PAGE_TEXT_LONG_TOKEN_THRESHOLD = 45
@@ -104,30 +102,33 @@ def detect_structure_hints(text):
 def _normalized_line(text):
     text = unicodedata.normalize("NFKD", text or "").casefold()
     text = "".join(char for char in text if not unicodedata.combining(char))
-    return re.sub(r"[^\w]+", " ", text).strip()
+    # Numeric separators and signs carry information in amounts, dates and
+    # identifiers. Treat those values as whole tokens instead of erasing their
+    # punctuation, which would make e.g. 10/02026 and 100/2026 look identical.
+    tokens = re.findall(r"[+-]?\d+(?:[.,/:\-]\d+)*|\w+|[<>=%+§-]", text)
+    return " ".join(tokens)
 
 
-def _is_ocr_line_already_native(normalized, native_flat, native_compact, native_lines, native_tokens):
-    if normalized == native_flat or (len(normalized) >= 8 and normalized in native_flat):
+def _is_ocr_line_already_native(normalized, native_flat, native_compact, native_lines):
+    # Compare complete lines/blocks. A substring can omit a negation, qualifier
+    # or a suffix of someone's name while otherwise matching native text.
+    if normalized == native_flat or normalized in native_lines:
         return True
     compact = normalized.replace(" ", "")
-    if len(compact) >= 12 and compact in native_compact:
+    if (
+        len(compact) >= 12
+        and not any(char.isdigit() for char in normalized)
+        and not re.search(r"[<>=%+§-]", normalized)
+        and (
+            compact == native_compact
+            or any(compact == existing.replace(" ", "") for existing in native_lines)
+        )
+    ):
+        # Purely alphabetic content can have spurious spaces from broken PDF
+        # font mappings. Require exact letters; numeric content must retain its
+        # token boundaries and punctuation through the strict match above.
         return True
 
-    tokens = normalized.split()
-    if len(tokens) >= 4 and native_tokens:
-        match = SequenceMatcher(None, tokens, native_tokens, autojunk=False).find_longest_match()
-        if (match.size / len(tokens)) >= 0.82:
-            return True
-
-    for existing in native_lines:
-        if normalized == existing or (len(normalized) >= 12 and normalized in existing):
-            return True
-        if min(len(normalized), len(existing)) >= 12:
-            shorter = min(len(normalized), len(existing))
-            longer = max(len(normalized), len(existing))
-            if (shorter / longer) >= 0.55 and SequenceMatcher(None, normalized, existing).ratio() >= 0.90:
-                return True
     return False
 
 
@@ -142,33 +143,29 @@ def merge_native_and_ocr_text(native_text, ocr_text):
 
     native_flat = _normalized_line(native_text)
     native_compact = native_flat.replace(" ", "")
-    native_tokens = native_flat.split()
     native_lines = [_normalized_line(line) for line in native_text.splitlines() if _normalized_line(line)]
     additional = []
-    additional_seen = set()
     for line in ocr_text.splitlines():
         cleaned = line.strip()
         normalized = _normalized_line(cleaned)
-        if not normalized or normalized in additional_seen:
+        if not normalized:
             continue
         if not _is_ocr_line_already_native(
-            normalized, native_flat, native_compact, native_lines, native_tokens
+            normalized, native_flat, native_compact, native_lines
         ):
             additional.append(cleaned)
-            additional_seen.add(normalized)
 
     if not additional:
         return native_text
 
     additional_tokens = _normalized_line(" ".join(additional)).split()
     if len(additional_tokens) >= 8:
-        native_counts = Counter(native_tokens)
-        additional_counts = Counter(additional_tokens)
-        overlap = sum(
-            min(count, native_counts.get(token, 0))
-            for token, count in additional_counts.items()
-        )
-        if overlap / len(additional_tokens) >= 0.90:
+        # OCR can split a table into one token per line. Discard it only when
+        # the complete sequence is already native, including order; a bag-of-
+        # words comparison can conceal changed associations between amounts,
+        # dates, people and products.
+        additional_flat = " ".join(additional_tokens)
+        if additional_flat == native_flat or additional_flat in native_lines:
             return native_text
     return native_text + "\n\n### Conteúdo adicional detectado por OCR\n\n" + "\n".join(additional)
 

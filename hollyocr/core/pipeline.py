@@ -230,6 +230,8 @@ def process_file(
                 ),
                 1,
             ):
+                if should_cancel(cancel_callback):
+                    return None, None
                 analysis = analyze_page_text_quality(text, min_chars=ocr_threshold)
                 page_index = page_number - 1
                 image_count = inspection.image_counts.get(page_index, 0)
@@ -259,6 +261,21 @@ def process_file(
             if page_store.page_count == 0:
                 return build_failure_meta(
                     file_path, output_format, "PDF sem páginas legíveis, vazio, protegido ou corrompido."
+                ), None
+            if inspection.page_count and page_store.page_count != inspection.page_count:
+                return build_failure_meta(
+                    file_path,
+                    output_format,
+                    f"Extração incompleta: {page_store.page_count} página(s) extraída(s) "
+                    f"para {inspection.page_count} página(s) no PDF. Nenhuma saída foi gravada.",
+                ), None
+            if extraction_issues and not use_ocr:
+                return build_failure_meta(
+                    file_path,
+                    output_format,
+                    f"Falha na camada nativa de {len(extraction_issues)} página(s). "
+                    "Ative OCR para tentar recuperar o conteúdo; nenhuma saída foi gravada.",
+                    [message for messages in extraction_issues.values() for message in messages],
                 ), None
         else:
             page_store = PageTextStore()
@@ -369,12 +386,15 @@ def process_file(
                         LOGGER.exception("Failed to render PDF pages %s-%s", first_page, last_page)
                         continue
 
-                    pairs = list(zip(batch, paths))
-                    if len(pairs) != len(batch):
+                    if len(paths) != len(batch):
                         warnings.append(
                             f"Renderização incompleta nas páginas {first_page}-{last_page}: "
                             f"{len(paths)} imagem(ns) para {len(batch)} página(s)."
                         )
+                        # The renderer did not identify which page is missing.
+                        # Do not attach an image's OCR to an unverified page number.
+                        continue
+                    pairs = list(zip(batch, paths))
 
                     def consume(page_index, text):
                         nonlocal completed
@@ -413,6 +433,10 @@ def process_file(
                                 for page_index, path in pairs
                             }
                             for future in as_completed(futures):
+                                if should_cancel(cancel_callback):
+                                    for pending_future in futures:
+                                        pending_future.cancel()
+                                    return
                                 page_index = futures[future]
                                 try:
                                     consume(page_index, future.result())
@@ -426,6 +450,8 @@ def process_file(
                                 run_parallel(pool)
                     else:
                         for page_index, path in pairs:
+                            if should_cancel(cancel_callback):
+                                return None, None
                             try:
                                 consume(
                                     page_index,
@@ -440,6 +466,20 @@ def process_file(
                             except Exception as exc:
                                 warnings.append(f"OCR falhou na página {page_index + 1}: {exc}")
                                 LOGGER.exception("OCR failed for page %s", page_index + 1)
+
+            if should_cancel(cancel_callback):
+                return None, None
+            if completed != len(pages_to_ocr):
+                return build_failure_meta(
+                    file_path,
+                    output_format,
+                    f"OCR incompleto: {completed}/{len(pages_to_ocr)} página(s) concluída(s). "
+                    "O progresso foi preservado para retomada; nenhuma saída foi gravada.",
+                    warnings,
+                ), None
+
+        if should_cancel(cancel_callback):
+            return None, None
 
         if not page_store.has_any_text():
             return build_failure_meta(

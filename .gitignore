@@ -7,6 +7,8 @@ __pycache__/
 env/
 venv/
 .venv/
+# Cópias locais de ambientes virtuais (ex.: .venv.stale-bak-*)
+.venv*/
 ENV/
 build/
 develop-eggs/
@@ -47,6 +49,9 @@ install_log.txt
 # Build artifacts
 build/
 dist/
+.build_backups/
+# Backups locais de builds anteriores (ex.: .build_backup_AAAAMMDD_HHMMSS/)
+.build_backup*/
 
 # Local/generated project folders
 .vs/

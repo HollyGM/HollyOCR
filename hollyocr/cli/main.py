@@ -95,7 +95,7 @@ def main():
 
     # O código abaixo será executado APENAS se for via linha de comando (sem GUI)
     use_ocr = not args.no_ocr
-    ocr_issues = check_ocr_environment(poppler_path, tesseract_path, args.lang) if use_ocr else []
+    ocr_issues = check_ocr_environment(poppler_path, tesseract_path, args.lang, backend=ocr_backend) if use_ocr else []
     if use_ocr and ocr_issues:
         print("AVISO: OCR pode falhar em PDFs escaneados ou imagens:")
         for issue in ocr_issues:
@@ -131,6 +131,7 @@ def main():
         not isinstance(sys.stderr, NullWriter)
         and is_interactive_terminal_stream(sys.stderr)
     )
+    interrupted = False
     with ProcessPoolExecutor(max_workers=workers) as executor:
         for fpath in tqdm(file_list, desc='Processando arquivos', disable=not show_terminal_progress):
             try:
@@ -155,11 +156,15 @@ def main():
                     metas.append(meta)
             except KeyboardInterrupt:
                 print('\nInterrompido pelo usuário')
+                interrupted = True
                 break
             except Exception as e:
                 LOGGER.exception("Unhandled error processing %s", fpath)
                 metas.append(build_failure_meta(fpath, args.output_format, f"Erro inesperado: {e}"))
                 print(f'Erro processando {fpath}: {e}')
+
+    if interrupted:
+        sys.exit(130)
 
     success_count = sum(1 for meta in metas if meta.get('status') == 'ok')
     failed_count = sum(1 for meta in metas if meta.get('status') == 'failed')

@@ -5,12 +5,11 @@
 Pré-requisitos:
 
 - macOS 12 ou superior;
-- Python 3.12 arm64 em `.venv`;
+- Python 3.12.15 ou patch posterior da série 3.12, arm64, em `.venv`;
 - Poppler, Tesseract e idiomas do Tesseract;
-- `mavis-trash`, usado para limpar builds anteriores de forma recuperável.
 
 ```bash
-brew install python@3.12 poppler tesseract tesseract-lang mavis-trash
+brew install python@3.12 poppler tesseract tesseract-lang
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-macos-lock.txt
@@ -18,6 +17,8 @@ python -m pip install -r requirements-macos-lock.txt
 ```
 
 O resultado fica em `dist/HollyOCR.app`. O script valida Python, arquitetura arm64, testes, análise estática, identificador do bundle, assinatura, tamanho e hash do aplicativo.
+
+Os artefatos anteriores são movidos para a Lixeira quando `mavis-trash` está disponível. Caso contrário, são preservados em `.build_backups/`, sem exigir a instalação de uma ferramenta adicional.
 
 O build local usa assinatura ad hoc. Distribuição pública sem o aviso do Gatekeeper exige uma conta Apple Developer, certificado Developer ID Application e notarização.
 

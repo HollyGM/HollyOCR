@@ -158,7 +158,7 @@ def _write_output_stream(handle, file_path: Path, pages_text, index, write_outpu
         handle.write(f"- Páginas com imagens relevantes para OCR: {ocr_image_pages}\n")
         if extraction_issue_pages:
             handle.write(
-                f"- Páginas com camada nativa incompleta recuperadas por OCR: {extraction_issue_pages}\n"
+                f"- Páginas com alertas de extração da camada nativa: {extraction_issue_pages}\n"
             )
         for source, count in sorted(source_counts.items()):
             handle.write(f"- {source}: {count}\n")

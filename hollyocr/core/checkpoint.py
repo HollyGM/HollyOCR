@@ -20,7 +20,7 @@ class ProcessingCheckpoint:
             "size": stat.st_size,
             "mtime_ns": stat.st_mtime_ns,
             "settings": settings,
-            "version": 3,
+            "version": 4,
         }
         self.manifest = self.root / "manifest.json"
         self._prepare()

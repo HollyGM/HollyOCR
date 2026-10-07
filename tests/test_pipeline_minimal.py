@@ -301,6 +301,23 @@ class PipelineMinimalTests(unittest.TestCase):
         self.assertEqual(len(pages), 1)
         self.assertIn("Documento A", pages[0])
 
+    def test_native_extraction_repairs_lone_surrogate_from_broken_font(self):
+        """Regression test: some PDFs (seen in real court-system exports) map a
+        glyph to a raw UTF-16 surrogate code unit instead of a full code point,
+        so pypdf's extract_text() returns a lone surrogate character. That used
+        to blow up the whole conversion with UnicodeEncodeError as soon as the
+        page text reached a strict-UTF-8 write (see _drop_lone_surrogates)."""
+        with mock.patch.object(core_extraction, "fitz", None), \
+             mock.patch.object(core_extraction, "pymupdf4llm", None), \
+             mock.patch.object(
+                 core_extraction, "_extract_pypdf_page_text", return_value="Peticao \ud83d inicial"
+             ):
+            meta, _ = app.process_file(self.pdf, self.output_dir, self.input_dir, use_ocr=False, output_format="md")
+        self.assertEqual(meta["status"], "ok")
+        content = Path(meta["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Peticao", content)
+        self.assertIn("inicial", content)
+
 
 class GuiSharedProcessingTests(unittest.TestCase):
     def setUp(self):

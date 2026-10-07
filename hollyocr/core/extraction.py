@@ -183,6 +183,23 @@ def _extract_pypdf_page_text(page, page_index, diagnostic_callback=None):
     return text
 
 
+def _drop_lone_surrogates(text):
+    """Repair or discard unpaired UTF-16 surrogates from malformed PDF fonts.
+
+    Some PDFs (seen in real court-system exports) map a glyph to raw UTF-16
+    surrogate code units instead of the combined code point, so an emoji like
+    a folder/document icon ends up as two lone characters in the extracted
+    string. Python's str can hold those, but writing them out as UTF-8 later
+    raises "surrogates not allowed" and aborts the whole document. Round-
+    tripping through UTF-16 rejoins any pair that is actually adjacent and
+    replaces whatever is still unpaired, so downstream strict UTF-8 writes
+    never see them.
+    """
+    if not text or not any(0xD800 <= ord(ch) <= 0xDFFF for ch in text):
+        return text
+    return text.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+
+
 def _has_complete_pdf_markers(pdf_path: Path):
     """Reject clearly truncated files before native parsers can retain handles."""
     try:
@@ -222,6 +239,7 @@ def iter_extracted_text_pages(
 
     # Try pymupdf4llm for markdown format
     if output_format == 'md' and allow_markdown_layout and pymupdf4llm is not None:
+        emitted_pages = 0
         try:
             try:
                 chunks = pymupdf4llm.to_markdown(
@@ -234,14 +252,21 @@ def iter_extracted_text_pages(
             except TypeError:
                 chunks = pymupdf4llm.to_markdown(str(pdf_path), page_chunks=True)
             for chunk in chunks:
-                yield chunk.get("text", "")
+                text = _drop_lone_surrogates(chunk.get("text", ""))
+                emitted_pages += 1
+                yield text
             return
         except Exception as e:
             LOGGER.exception("pymupdf4llm failed for %s", pdf_path)
+            if emitted_pages:
+                # A fallback restarting at page 1 would duplicate already
+                # emitted pages and shift every subsequent OCR/page label.
+                return
             print(f"pymupdf4llm failed, falling back to pymupdf: {e}")
 
     # Try PyMuPDF (fitz)
     if fitz is not None:
+        emitted_pages = 0
         try:
             with fitz.open(str(pdf_path)) as doc:
                 for page_index, page in enumerate(doc):
@@ -251,10 +276,14 @@ def iter_extracted_text_pages(
                         txt = ''
                         if diagnostic_callback:
                             diagnostic_callback(page_index, f"Falha na extração nativa: {exc}")
-                    yield txt
+                    text = _drop_lone_surrogates(txt)
+                    emitted_pages += 1
+                    yield text
             return
         except Exception as e:
             LOGGER.exception("PyMuPDF failed to extract text from %s", pdf_path)
+            if emitted_pages:
+                return
             print(f"PyMuPDF failed to extract text: {e}. Falling back to pypdf.")
 
     # Fallback to pypdf
@@ -264,7 +293,8 @@ def iter_extracted_text_pages(
         with pdf_path.open("rb") as pdf_stream:
             reader = PdfReader(pdf_stream)
             for page_index, page in enumerate(reader.pages):
-                yield _extract_pypdf_page_text(page, page_index, diagnostic_callback)
+                text = _extract_pypdf_page_text(page, page_index, diagnostic_callback)
+                yield _drop_lone_surrogates(text)
         return
     except Exception as e:
         LOGGER.exception("pypdf failed to extract text from %s", pdf_path)
@@ -496,40 +526,75 @@ def extract_text_pages(
 
 
 def extract_table_text(table):
+    """Read table cells in order, including nested tables, without merged repeats."""
     rows = []
+    seen_cells = set()
     for row in table.rows:
-        cells = []
+        cells = [""] * row.grid_cols_before
         for cell in row.cells:
-            value = ' '.join(cell.text.split())
-            cells.append(value)
-        row_text = '\t'.join(cells).strip()
-        if row_text:
-            rows.append(row_text)
+            # python-docx repeats the same XML cell for every occupied grid
+            # position of a horizontal or vertical merge. Keep the occupied
+            # columns but emit its actual content only once.
+            if cell._tc in seen_cells:
+                cells.append("")
+                continue
+            seen_cells.add(cell._tc)
+            cells.append(_extract_docx_container_text(cell))
+        cells.extend([""] * row.grid_cols_after)
+        if any(cell.strip() for cell in cells):
+            # Leading/trailing empty grid positions still identify the column
+            # of an amount or label, particularly below a vertical merge.
+            rows.append('\t'.join(cells))
     return '\n'.join(rows)
+
+
+def _extract_docx_container_text(container):
+    """Use python-docx's ordered block API for bodies, headers and table cells."""
+    from docx.table import Table
+
+    parts = []
+    for block in container.iter_inner_content():
+        text = extract_table_text(block) if isinstance(block, Table) else block.text.strip()
+        if text.strip():
+            parts.append(text)
+    return '\n'.join(parts)
 
 
 def extract_docx_text(file_path: Path):
     document = docx.Document(file_path)
     parts = []
 
-    def add_text(text):
-        text = text.strip()
+    def add_container(container):
+        text = _extract_docx_container_text(container)
         if text:
             parts.append(text)
 
+    # Linked sections reuse the exact same header/footer part. Read each
+    # effective part once, including first/even-page variants when enabled.
+    seen_parts = set()
+
+    def add_section_container(container):
+        part_name = container.part.partname
+        if part_name in seen_parts:
+            return
+        seen_parts.add(part_name)
+        add_container(container)
+
     for section in document.sections:
-        for paragraph in section.header.paragraphs:
-            add_text(paragraph.text)
+        add_section_container(section.header)
+        if section.different_first_page_header_footer:
+            add_section_container(section.first_page_header)
+        if document.settings.odd_and_even_pages_header_footer:
+            add_section_container(section.even_page_header)
 
-    for paragraph in document.paragraphs:
-        add_text(paragraph.text)
-
-    for table in document.tables:
-        add_text(extract_table_text(table))
+    add_container(document)
 
     for section in document.sections:
-        for paragraph in section.footer.paragraphs:
-            add_text(paragraph.text)
+        add_section_container(section.footer)
+        if section.different_first_page_header_footer:
+            add_section_container(section.first_page_footer)
+        if document.settings.odd_and_even_pages_header_footer:
+            add_section_container(section.even_page_footer)
 
     return '\n'.join(parts)
 
