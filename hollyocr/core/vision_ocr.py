@@ -133,9 +133,13 @@ def _map_lang_to_vision(lang):
     # If already BCP-47-ish, use as-is.
     if "-" in lang or "_" in lang:
         return [str(lang).replace("_", "-")]
-    primary = lang.split("+")[0].strip().lower()
-    mapped = _TESSERACT_TO_VISION_LANG.get(primary, "en-US")
-    return [mapped]
+    # "por+eng" (como no Tesseract) vira ["pt-BR", "en-US"]: o Vision reconhece os dois.
+    mapped = []
+    for code in str(lang).split("+"):
+        vision = _TESSERACT_TO_VISION_LANG.get(code.strip().lower())
+        if vision and vision not in mapped:
+            mapped.append(vision)
+    return mapped or ["en-US"]
 
 
 def _warm_up_vision_models(cg_image_factory):

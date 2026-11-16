@@ -3,6 +3,11 @@ name: Qualidade
 on:
   push:
   pull_request:
+  # Uma vez por mês, mesmo sem mudanças no código: a checagem de dependências
+  # (pip-audit) avisa quando surgem falhas novas nas bibliotecas travadas.
+  schedule:
+    - cron: "0 9 1 * *"
+  workflow_dispatch:
 
 permissions:
   contents: read

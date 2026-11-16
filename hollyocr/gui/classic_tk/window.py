@@ -190,7 +190,7 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
             title="Selecionar arquivos",
             initialdir=initial_dir,
             filetypes=[
-                ("Documentos aceitos", "*.pdf *.docx *.md *.markdown *.png *.jpg *.jpeg"),
+                ("Documentos aceitos", "*.pdf *.docx *.md *.markdown *.png *.jpg *.jpeg *.tif *.tiff *.heic *.heif"),
                 ("PDF", "*.pdf"),
                 ("Todos", "*.*"),
             ],
@@ -302,7 +302,7 @@ def choose_input_output_gui_plain_tk(default_poppler=None, default_tesseract=Non
             out_base = Path(output_arg)
             ensure_dir(out_base)
 
-            file_paths = list(find_files(input_path))
+            file_paths = list(find_files(input_path, exclude_dir=out_base))
             if not file_paths:
                 post_ui(lambda: None if lifecycle.close_requested else messagebox.showwarning(
                     "Entrada", "Nenhum arquivo compatível foi encontrado."

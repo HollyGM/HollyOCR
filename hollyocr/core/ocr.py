@@ -26,6 +26,78 @@ from hollyocr.utils.logging_setup import LOGGER
 
 from .quality import analyze_page_text_quality, choose_best_page_text
 
+# Formatos que o Pillow pode decodificar no OCR. Sem esta lista ele identifica o formato
+# pelo conteúdo, e um ".jpg" disfarçado chegaria a decodificadores que o app nunca usa
+# (e que concentram as falhas de segurança publicadas).
+OCR_IMAGE_FORMATS = ("JPEG", "PNG")
+DIRECT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+TIFF_EXTENSIONS = {".tif", ".tiff"}
+HEIC_EXTENSIONS = {".heic", ".heif"}
+IMAGE_EXTENSIONS = DIRECT_IMAGE_EXTENSIONS | TIFF_EXTENSIONS | HEIC_EXTENSIONS
+MAX_TIFF_PAGES = 2000
+SIPS_PATH = "/usr/bin/sips"
+
+
+def _frame_for_png(frame):
+    """A TIFF page in a mode PNG keeps without losing the text (1-bit, 8-bit gray or RGB)."""
+    if frame.mode in ("1", "L", "RGB"):
+        return frame
+    if frame.mode.startswith("I") or frame.mode == "F":
+        # Cinza de 16/32 bits (alguns scanners): reescala para 8 bits pelo maior valor,
+        # em vez de cortar tudo acima de 255 (o que deixaria a página branca).
+        wide = frame.convert("F")
+        highest = (wide.getextrema() or (0, 0))[1] or 0
+        if highest > 255:
+            wide = wide.point(lambda value: value * (255.0 / highest))
+        return wide.convert("L")
+    return frame.convert("RGB")
+
+
+def expand_image_input(image_path, temp_dir):
+    """Return the image file(s) to OCR for one input image, one per page.
+
+    PNG/JPEG are used as they are. A TIFF (often a multi-page scan) is split into
+    one PNG per page. HEIC/HEIF (iPhone photos) is converted to PNG by macOS
+    itself (``sips``), since Pillow does not read it.
+    """
+    image_path = Path(image_path)
+    temp_dir = Path(temp_dir)
+    ext = image_path.suffix.lower()
+    if ext in DIRECT_IMAGE_EXTENSIONS:
+        return [image_path]
+    if ext in TIFF_EXTENSIONS:
+        if Image is None:
+            raise RuntimeError("Pillow é necessário para ler arquivos TIFF.")
+        from PIL import ImageSequence
+
+        pages = []
+        with Image.open(image_path, formats=("TIFF",)) as tiff:
+            for number, frame in enumerate(ImageSequence.Iterator(tiff), 1):
+                if number > MAX_TIFF_PAGES:
+                    raise RuntimeError(f"TIFF com mais de {MAX_TIFF_PAGES} páginas não é suportado.")
+                page_path = temp_dir / f"tiff_pagina_{number:05d}.png"
+                _frame_for_png(frame).save(page_path, "PNG")
+                pages.append(page_path)
+        if not pages:
+            raise RuntimeError("TIFF sem páginas legíveis.")
+        return pages
+    if ext in HEIC_EXTENSIONS:
+        if not Path(SIPS_PATH).exists():
+            raise RuntimeError("Fotos HEIC só podem ser convertidas no macOS.")
+        converted = temp_dir / "foto_heic.png"
+        # Executável fixo do sistema, argumentos em lista e sem shell.
+        proc = subprocess.run(  # nosec B603
+            [SIPS_PATH, "-s", "format", "png", str(image_path), "--out", str(converted)],
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=120,
+        )
+        if proc.returncode != 0 or not converted.exists():
+            raise RuntimeError("Não foi possível converter a foto HEIC para OCR.")
+        return [converted]
+    raise ValueError(f"Formato de imagem não suportado: {ext}")
+
 
 def _delete_temporary_image(image_path):
     """Remove only an image stored below the operating system temp folder."""
@@ -201,7 +273,7 @@ def ocr_image_file(image_path: str, lang='por', tesseract_path=None,
         pytesseract.pytesseract.tesseract_cmd = str(tesseract_path)
 
     try:
-        with Image.open(image_path) as img:
+        with Image.open(image_path, formats=OCR_IMAGE_FORMATS) as img:
             return extract_ocr_text(img, lang=lang, tesseract_path=tesseract_path)
     finally:
         if delete_after:

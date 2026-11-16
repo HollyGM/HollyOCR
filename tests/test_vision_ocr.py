@@ -52,8 +52,10 @@ class VisionOcrLangMapTests(unittest.TestCase):
         # for those, so fall back gracefully.
         self.assertEqual(vision_ocr._map_lang_to_vision("vie"), ["en-US"])
 
-    def test_composite_lang_uses_first(self):
-        self.assertEqual(vision_ocr._map_lang_to_vision("por+eng"), ["pt-BR"])
+    def test_composite_lang_uses_every_known_language(self):
+        self.assertEqual(vision_ocr._map_lang_to_vision("por+eng"), ["pt-BR", "en-US"])
+        self.assertEqual(vision_ocr._map_lang_to_vision("vie+por"), ["pt-BR"])
+        self.assertEqual(vision_ocr._map_lang_to_vision("por+pt"), ["pt-BR"])
 
 
 class VisionOcrAvailabilityTests(unittest.TestCase):

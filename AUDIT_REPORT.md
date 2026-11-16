@@ -1,5 +1,26 @@
 # Relatórios de revisão do HollyOCR
 
+## HollyOCR 5.1.0, build 5 — 16 de novembro de 2026
+
+### Resultado
+
+A revisão encontrou oito pontos. Dois foram confirmados como graves, e os oito foram corrigidos.
+
+- **PDF protegido só contra alterações.** O aplicativo instalado (5.0.1) foi executado pela linha de comando com dois PDFs de teste. O PDF comum converteu. O protegido falhou, com e sem OCR: "cryptography>=3.1 is required for AES algorithm". O Poppler lia o mesmo arquivo normalmente.
+- **Dependências.** A consulta à base OSV encontrou alertas publicados depois da revisão de 2 de outubro:
+  - Pillow 12.3.0: 62 alertas, sendo 5 críticos e 24 altos;
+  - pypdf 6.19.0: 18 alertas, sendo 10 altos;
+  - setuptools 84.0.0: 1 alerta baixo.
+
+  A verificação mensal na CI foi acrescentada para que isso não volte a passar despercebido.
+
+### Validação
+
+- 97 testes e 15 subtestes aprovados com Python 3.12.15, pypdf 6.21.4, Pillow 13.0.0 e cryptography 50.0.2.
+- Pyflakes sem erros.
+- `pip check` sem inconsistências.
+- Nenhum dos 37 pacotes travados tem alerta conhecido na OSV, na consulta desta data.
+
 ## HollyOCR 5.0.1, build 4 — 2 de outubro de 2026
 
 ### Resultado

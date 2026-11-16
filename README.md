@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img alt="Versão 5.0.1, build 4" src="https://img.shields.io/badge/versão-5.0.1%20%C2%B7%20build%204-55D6BE">
+  <img alt="Versão 5.1.0, build 5" src="https://img.shields.io/badge/versão-5.1.0%20%C2%B7%20build%205-55D6BE">
   <img alt="Python 3.12.15 ou posterior da série 3.12" src="https://img.shields.io/badge/Python-3.12.15%2B-6BB8FF">
   <img alt="Licença" src="https://img.shields.io/badge/licença-Apache--2.0-92AAB5">
   <img alt="Plataformas" src="https://img.shields.io/badge/plataformas-macOS%20%7C%20Windows%20%7C%20Linux-F3FAFC">
@@ -41,8 +41,10 @@ Todo o processamento acontece no computador. O HollyOCR não envia documentos pa
 
 | Entrada | Processamento |
 |---|---|
-| PDF | texto nativo, inspeção de imagens e OCR seletivo |
+| PDF | texto nativo, inspeção de imagens e OCR seletivo. PDFs protegidos só contra alterações são lidos normalmente; com senha de abertura, a conversão é recusada com aviso |
 | PNG, JPG e JPEG | OCR direto sem excluir o arquivo original |
+| TIFF | OCR de cada página (digitalizações com várias páginas) |
+| HEIC e HEIF (fotos do iPhone) | convertidas pelo próprio macOS e lidas por OCR; só no macOS |
 | DOCX | parágrafos e tabelas na ordem original, tabelas aninhadas, cabeçalhos e rodapés |
 | Markdown | organização e conversão para MD ou TXT |
 
@@ -99,7 +101,8 @@ Observações:
 
 - A verificação de dependências considera o mecanismo escolhido em `--ocr-backend`. Idiomas combinados do Tesseract, como `--lang por+eng`, são conferidos um a um.
 - Com `--no-ocr`, um PDF cuja camada de texto nativa apresente falhas é registrado como falha, sem gerar saída. Ative o OCR para recuperar o conteúdo dessas páginas.
-- O progresso do OCR fica em `.hollyocr_checkpoints/`, dentro da pasta de saída, e é removido quando a conversão termina. Checkpoints criados por versões anteriores à 5.0.1 são descartados, e o OCR desses arquivos recomeça.
+- O progresso do OCR, que contém o texto das páginas já lidas, fica em `~/Library/Application Support/HollyOCR/checkpoints/` (no Windows, em `%APPDATA%\HollyOCR\checkpoints`), com acesso só do seu usuário. Ele é removido quando a conversão termina e, se ela não for retomada, apagado depois de 30 dias. Versões até a 5.0.1 guardavam esse progresso em `.hollyocr_checkpoints/`, dentro da pasta de saída; ao converter de novo o mesmo arquivo, essa pasta antiga é apagada.
+- Se a pasta de saída estiver dentro da pasta de entrada, os arquivos dela são ignorados na busca, para que conversões anteriores não sejam convertidas de novo.
 - Ctrl+C interrompe o lote sem anunciar conclusão e encerra com código 130.
 
 ## Windows e Linux
@@ -128,11 +131,11 @@ python -m bandit -q -ll -r hollyocr
 python -m pip_audit -r requirements-macos-lock.txt
 ```
 
-Os relatórios das revisões das versões 5.0.0 e 5.0.1 estão em [AUDIT_REPORT.md](AUDIT_REPORT.md), e as mudanças estão no [CHANGELOG.md](CHANGELOG.md). Para comunicar uma vulnerabilidade, consulte [SECURITY.md](SECURITY.md).
+Os relatórios das revisões das versões 5.0.0, 5.0.1 e 5.1.0 estão em [AUDIT_REPORT.md](AUDIT_REPORT.md), e as mudanças estão no [CHANGELOG.md](CHANGELOG.md). Para comunicar uma vulnerabilidade, consulte [SECURITY.md](SECURITY.md).
 
 ## Versão
 
-Versão atual: **5.0.1**, build **4**. Esta atualização corrige a preservação de conteúdo, a extração de DOCX, a identificação de conversões incompletas e o cancelamento da interface, e atualiza o ambiente macOS para Python 3.12.15, Poppler 26.09.0 e Tesseract 5.5.3. O histórico completo está no [CHANGELOG.md](CHANGELOG.md).
+Versão atual: **5.1.0**, build **5**. Esta atualização faz o aplicativo ler PDFs protegidos só contra alterações, corrige falhas de segurança publicadas no Pillow e no pypdf, guarda o progresso do OCR fora da pasta de saída e aceita TIFF e fotos HEIC. O histórico completo está no [CHANGELOG.md](CHANGELOG.md).
 
 ## Licença
 

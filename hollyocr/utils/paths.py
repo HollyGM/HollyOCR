@@ -83,8 +83,10 @@ def get_runtime_roots():
         if hasattr(sys, '_MEIPASS'):
             roots.append(Path(sys._MEIPASS))
 
+    # A pasta atual não entra: um "bin/pdftoppm" numa pasta baixada seria executado
+    # no lugar do Poppler instalado. Em desenvolvimento, vale a raiz do projeto.
     script_dir = Path(__file__).resolve().parent
-    roots.extend([script_dir, script_dir.parent, Path.cwd()])
+    roots.extend([script_dir, script_dir.parent, script_dir.parent.parent])
     return unique_paths(roots)
 
 

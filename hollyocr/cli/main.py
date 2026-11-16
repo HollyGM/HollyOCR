@@ -116,7 +116,7 @@ def main():
     # poppler_path and tesseract_path are already resolved above
 
     metas = []
-    file_list = list(find_files(input_path))
+    file_list = list(find_files(input_path, exclude_dir=out_base))
     if not file_list:
         print('Nenhum arquivo encontrado em', input_arg)
         sys.exit(1)

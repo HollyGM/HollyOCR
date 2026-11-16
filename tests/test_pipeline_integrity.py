@@ -9,7 +9,7 @@ from unittest import mock
 
 import pymupdf
 
-from hollyocr.core import extraction, pipeline
+from hollyocr.core import checkpoint, extraction, pipeline
 
 
 class PipelineIntegrityTests(unittest.TestCase):
@@ -75,7 +75,8 @@ class PipelineIntegrityTests(unittest.TestCase):
         self.assertEqual(meta["status"], "failed")
         self.assertIn("OCR incompleto", meta["error"])
         self.assertIn("Poppler falhou", meta["warnings"][0])
-        self.assertTrue(list(self.out.rglob("manifest.json")))
+        self.assertTrue(list(checkpoint.checkpoints_root().rglob("manifest.json")))
+        self.assertFalse((self.out / ".hollyocr_checkpoints").exists())
         self.assert_no_output()
 
         with mock.patch.object(pipeline, "convert_from_path", return_value=["one.jpg", "two.jpg"]), \
@@ -99,8 +100,9 @@ class PipelineIntegrityTests(unittest.TestCase):
              mock.patch.object(pipeline, "ocr_image_file", side_effect=[RuntimeError("OCR falhou"), "Texto segunda"]):
             meta, _ = self.convert(force_ocr=True)
         self.assertEqual(meta["status"], "failed")
-        self.assertTrue(list(self.out.rglob("page_000002.txt")))
-        self.assertEqual(list(self.out.rglob("page_000001.txt")), [])
+        self.assertTrue(list(checkpoint.checkpoints_root().rglob("page_000002.txt")))
+        self.assertEqual(list(checkpoint.checkpoints_root().rglob("page_000001.txt")), [])
+        self.assertEqual(list(self.out.rglob("page_*.txt")), [])
         self.assert_no_output()
 
         with mock.patch.object(pipeline, "convert_from_path", return_value=["one.jpg"]) as render, \
@@ -124,7 +126,8 @@ class PipelineIntegrityTests(unittest.TestCase):
             meta, _ = self.convert(force_ocr=True, cancel_callback=cancelled.is_set)
         self.assertIsNone(meta)
         self.assertEqual(ocr.call_count, 1)
-        self.assertTrue(list(self.out.rglob("page_000001.txt")))
+        self.assertTrue(list(checkpoint.checkpoints_root().rglob("page_000001.txt")))
+        self.assertEqual(list(self.out.rglob("page_*.txt")), [])
         self.assert_no_output()
 
     def test_cancel_during_native_extraction_stops_without_output(self):

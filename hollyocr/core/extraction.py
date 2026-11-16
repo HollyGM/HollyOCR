@@ -9,11 +9,17 @@ from pathlib import Path
 from hollyocr.utils.logging_setup import LOGGER
 
 try:
-    from pypdf import PdfReader
+    from pypdf import PasswordType, PdfReader
     from pypdf.generic import ContentStream
 except Exception:
+    PasswordType = None
     PdfReader = None
     ContentStream = None
+
+PASSWORD_REQUIRED_MESSAGE = (
+    "PDF protegido por senha de abertura. Abra-o com a senha, salve uma cópia sem senha "
+    "e converta a cópia; nenhuma saída foi gravada."
+)
 
 try:
     import docx
@@ -42,6 +48,7 @@ class PdfInspection:
     warning: str = ""
     image_coverages: dict = field(default_factory=dict)
     coverage_reliable: bool = True
+    password_required: bool = False
 
 if MUPDF_DISABLED_FOR_STABILITY:
     fitz = None
@@ -58,9 +65,25 @@ else:
         pymupdf4llm = None
 
 
-def find_files(input_path):
-    """Accept either a single file path, list of file paths, or directory path."""
-    valid_extensions = {'.pdf', '.md', '.markdown', '.docx', '.png', '.jpg', '.jpeg'}
+def _inside(path: Path, folder):
+    if folder is None:
+        return False
+    try:
+        return path.resolve().is_relative_to(Path(folder).resolve())
+    except (OSError, RuntimeError):
+        return False
+
+
+def find_files(input_path, exclude_dir=None):
+    """Accept either a single file path, list of file paths, or directory path.
+
+    ``exclude_dir`` (the output folder) is skipped when scanning a directory, so
+    earlier conversions saved inside the input folder are not converted again.
+    """
+    valid_extensions = {
+        '.pdf', '.md', '.markdown', '.docx',
+        '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.heic', '.heif',
+    }
     # If input_path is a list (multiple files selected)
     if isinstance(input_path, list):
         for f in input_path:
@@ -75,7 +98,7 @@ def find_files(input_path):
         elif p.is_dir():
             files = (
                 f for f in p.rglob('*')
-                if f.is_file() and f.suffix.lower() in valid_extensions
+                if f.is_file() and f.suffix.lower() in valid_extensions and not _inside(f, exclude_dir)
             )
             for f in sorted(files, key=lambda item: str(item).lower()):
                 yield f
@@ -470,6 +493,10 @@ def inspect_pdf(pdf_path: Path):
     try:
         with pdf_path.open("rb") as pdf_stream:
             reader = PdfReader(pdf_stream)
+            # Proteção só de permissões (sem senha de abertura) é decifrada com a senha vazia,
+            # como em qualquer leitor de PDF. Com senha de abertura, não há como prosseguir.
+            if reader.is_encrypted and reader.decrypt("") == PasswordType.NOT_DECRYPTED:
+                return PdfInspection(0, frozenset(), {}, False, PASSWORD_REQUIRED_MESSAGE, password_required=True)
             image_counts = {}
             image_coverages = {}
             coverage_warnings = []

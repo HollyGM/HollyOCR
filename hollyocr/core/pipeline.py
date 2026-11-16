@@ -29,7 +29,7 @@ from .extraction import (
     inspect_pdf,
     normalize_output_format,
 )
-from .ocr import get_contiguous_batches, ocr_image_file
+from .ocr import IMAGE_EXTENSIONS, expand_image_input, get_contiguous_batches, ocr_image_file
 from .output_writer import (
     _write_output_stream,
     build_failure_meta,
@@ -208,6 +208,8 @@ def process_file(
 
         if ext == ".pdf":
             inspection = inspect_pdf(file_path)
+            if inspection.password_required:
+                return build_failure_meta(file_path, output_format, inspection.warning), None
             profile = choose_processing_profile(inspection.page_count, ocr_dpi)
             page_store = PageTextStore(profile.page_spill_threshold, profile.char_spill_threshold)
             if status_callback:
@@ -287,13 +289,25 @@ def process_file(
                     return build_failure_meta(file_path, output_format, "python-docx não está instalado."), None
                 text = extract_docx_text(file_path)
                 page_store.append(text, build_page_detail(1, text, "docx"))
-            elif ext in {".png", ".jpg", ".jpeg"}:
+            elif ext in IMAGE_EXTENSIONS:
                 if not use_ocr:
                     return build_failure_meta(file_path, output_format, "OCR desativado; imagens exigem OCR."), None
-                text = ocr_image_file(
-                    str(file_path), lang=lang, tesseract_path=tesseract_path, backend=ocr_backend, delete_after=False
-                )
-                page_store.append(text, build_page_detail(1, text, "imagem-ocr", image_count=1, ocr_reason="imagem de entrada"))
+                import tempfile
+
+                # TIFF pode ter várias páginas; HEIC é convertido antes. O arquivo original nunca é apagado.
+                with tempfile.TemporaryDirectory(prefix="hollyocr_img_") as temp_dir:
+                    images = expand_image_input(file_path, temp_dir)
+                    for number, image in enumerate(images, 1):
+                        if should_cancel(cancel_callback):
+                            return None, None
+                        text = ocr_image_file(
+                            str(image), lang=lang, tesseract_path=tesseract_path, backend=ocr_backend, delete_after=False
+                        )
+                        reason = "imagem de entrada" if len(images) == 1 else f"página {number} de {len(images)} da imagem"
+                        page_store.append(
+                            text, build_page_detail(number, text, "imagem-ocr", image_count=1, ocr_reason=reason)
+                        )
+                        _report_progress(progress_callback, 0.99 * number / len(images))
             else:
                 return build_failure_meta(file_path, output_format, f"Formato não suportado: {ext}"), None
 
